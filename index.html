@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wikiposter – build a poster from Wikipedia images</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23f8f9fa'/%3E%3Crect x='6' y='6' width='32' height='26' fill='%233366cc'/%3E%3Crect x='42' y='6' width='16' height='16' fill='%2314866d'/%3E%3Crect x='42' y='26' width='16' height='32' fill='%23f28500'/%3E%3Crect x='6' y='36' width='14' height='22' fill='%23795cb2'/%3E%3Crect x='24' y='36' width='14' height='22' fill='%23a2a9b1'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{--link:#3366cc;--visited:#795cb2;--bd:#a2a9b1;--thumb:#c8ccd1;--bg:#f8f9fa;--tx:#202122;--mut:#54595d}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:14px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--tx);background:#fff;display:flex;flex-direction:column}
+a,button.l{color:var(--link);text-decoration:none;cursor:pointer;background:none;border:0;padding:0;font:inherit}
+a:hover,button.l:hover{text-decoration:underline}
+header{border-bottom:1px solid var(--bd);padding:8px 16px;display:flex;gap:14px;align-items:baseline;background:#fff}
+header h1{font:400 26px "Linux Libertine",Georgia,Times,serif;margin:0}
+header span{color:var(--mut)}
+main{flex:1;display:grid;grid-template-columns:370px 1fr;min-height:0}
+#left{border-right:1px solid var(--bd);background:var(--bg);overflow:auto;padding:12px}
+#stage{overflow:auto;background:#eaecf0;padding:12px;position:relative}
+h2{font:400 20px "Linux Libertine",Georgia,Times,serif;border-bottom:1px solid var(--bd);margin:14px 0 8px;padding-bottom:2px}
+.sr{display:flex;gap:6px}
+input[type=search]{flex:1;padding:6px 8px;border:1px solid var(--bd);border-radius:2px;font:inherit}
+input[type=search]:focus{outline:2px solid var(--link);outline-offset:-1px;border-color:var(--link)}
+.btn{padding:6px 12px;border:1px solid var(--bd);border-radius:2px;background:#f8f9fa;color:var(--tx);cursor:pointer;font:inherit}
+.btn:hover{background:#fff;border-color:#72777d}
+.btn.p{background:var(--link);border-color:var(--link);color:#fff;font-weight:700}
+.btn.p:hover{background:#2a4b8d}
+.chips{display:flex;flex-wrap:wrap;gap:4px 12px;margin:10px 0}
+.hit{display:flex;gap:10px;padding:6px;border-bottom:1px solid #eaecf0;cursor:pointer}
+.hit:hover{background:#fff}
+.hit img,.hit i{width:48px;height:48px;object-fit:cover;flex:none;background:#eaecf0}
+.hit b{color:var(--link);font-weight:400}.hit small{display:block;color:var(--mut);line-height:1.3}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.card{border:1px solid var(--thumb);background:#fff;padding:3px;cursor:pointer;font-size:12px;line-height:1.3;position:relative}
+.card:hover{border-color:var(--link);box-shadow:0 0 0 1px var(--link)}
+.card img{width:100%;height:96px;object-fit:contain;background:#f0f1f2;display:block}
+.card p{margin:3px 1px;max-height:4em;overflow:hidden;color:var(--tx)}
+.card.on::after{content:"✓ On poster";position:absolute;top:4px;left:4px;background:#14866d;color:#fff;font-size:11px;padding:0 5px}
+.msg{color:var(--mut);padding:10px 2px}
+#wrap{margin:0 auto;position:relative;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+#board{width:1200px;min-height:700px;background:#fff;position:absolute;left:0;top:0;transform-origin:0 0}
+#empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);font:400 20px "Linux Libertine",Georgia,serif;pointer-events:none;padding:40px}
+.tile{position:absolute;background:var(--bg);border:1px solid var(--thumb);padding:3px;touch-action:none;cursor:move;visibility:hidden}
+.tile img{display:block;width:100%;border:1px solid var(--thumb);pointer-events:none;background:#fff}
+.tile .cap{margin-top:3px;font-size:inherit;line-height:1.35;cursor:text;outline:none;word-wrap:break-word}
+.tile .cap:focus{background:#fffbe0}
+.tile .x,.tile .rs{position:absolute;opacity:0}
+.tile .x{top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;border:1px solid var(--bd);background:#fff;cursor:pointer;line-height:16px;padding:0;color:#b32424}
+.tile .rs{right:-5px;bottom:-5px;width:12px;height:12px;background:var(--link);cursor:nwse-resize}
+.tile:hover{border-color:var(--link)}.tile:hover .x,.tile:hover .rs{opacity:1}
+.exp .x,.exp .rs,.exp #empty{display:none}
+.bar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.bar .sp{flex:1}
+.btn:disabled{opacity:.45;cursor:default}
+.bar label{display:flex;gap:5px;align-items:center}
+.tile .cap a{color:var(--link)}
+.tile .tb{position:absolute;top:-11px;left:-1px;display:flex;opacity:0}
+.tile .tb button{width:20px;height:20px;border:1px solid var(--bd);background:#fff;padding:0;cursor:pointer;line-height:16px;font-size:12px}
+.tile:hover .tb{opacity:1}
+.tile.out{opacity:.5}
+.tile.notice{background:#fbfbfb;border-left:10px solid #36c;padding:6px 8px}
+.tile.info{background:#f8f9fa;border-color:var(--bd);padding:0}
+.tile.notice .cap,.tile.info .cap{margin:0}
+.info table{width:100%;border-collapse:collapse}
+.info th,.info td{padding:2px 6px;text-align:left;vertical-align:top}
+.info th[colspan]{text-align:center;background:#cedff2}
+.exp .tb{display:none}
+.exp .tile{opacity:1!important}
+#cr{position:absolute;left:16px;width:1168px;padding-top:10px;border-top:1px solid var(--thumb);font-size:11px;line-height:1.4;color:var(--mut)}
+#cr .cols{display:flex;gap:24px;margin-top:4px}#cr .cols>div{flex:1}
+.tile.notice{--nc:#36c;border-left:10px solid var(--nc);padding:6px 8px 6px 44px;min-height:38px}
+.tile.notice::before{content:"i";position:absolute;left:8px;top:50%;margin-top:-11px;width:22px;height:22px;border-radius:50%;background:var(--nc);color:#fff;font:700 15px/22px Georgia,serif;text-align:center}
+.tile.nb-style{--nc:#fc3}.tile.nb-content{--nc:#f28500}.tile.nb-delete{--nc:#b32424}
+.tile.nb-content::before,.tile.nb-delete::before{content:"!"}
+.tile.ibx{background:#f8f9fa;border-color:var(--bd)}
+.ibx .cap{margin:0;cursor:default}
+.ibx table.infobox{width:100%;border-collapse:separate;border-spacing:3px;color:#202122;line-height:1.5;margin:0;background:none;float:none}
+.ibx caption{font-weight:700;font-size:125%;text-align:center;padding:.2em}
+.ibx th,.ibx td{vertical-align:top;text-align:left;padding:.2em .4em}
+.ibx .infobox-above,.ibx .infobox-title{text-align:center;font-weight:700;font-size:125%}
+.ibx .infobox-header,.ibx .infobox-subheader{text-align:center;font-weight:700;background:#cedff2}
+.ibx .infobox-image,.ibx .infobox-full-data,.ibx .infobox-below{text-align:center}
+.ibx img{max-width:100%;height:auto;border:0}
+.ibx a{color:var(--link)}
+.ibx ul,.ibx ol{margin:0;padding-left:1.2em}.ibx li{margin:0}
+.ibx .plainlist ul,.ibx .hlist ul{list-style:none;padding:0}
+.ibx .hlist li{display:inline}.ibx .hlist li:not(:last-child)::after{content:" · "}
+@media(max-width:820px){main{grid-template-columns:1fr;grid-template-rows:46vh 1fr}#left{border-right:0;border-bottom:1px solid var(--bd)}}
+</style></head>
+<body>
+<header><h1>Wikiposter</h1><span>Build a poster from Wikipedia's image boxes</span></header>
+<main>
+<section id="left">
+  <div class="sr"><input id="q" type="search" placeholder="Search a topic or paste a Wikipedia link" aria-label="Search Wikipedia"><button class="btn p" id="go">Search</button></div>
+  <div class="chips" id="chips"></div>
+  <div id="res"><p class="msg">Pick a topic, open an article, then click any image to add it with its caption. The 🎲 button jumps to random articles — that's how most good posters end up with a hyrax next to a CD-ROM.</p></div>
+</section>
+<section id="stage">
+  <div class="bar">
+    <button class="btn" id="undo" title="Undo (Ctrl+Z)">↶ Undo</button><button class="btn" id="redo" title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
+    <button class="btn" id="pack" title="Repack all tiles tightly">Auto-arrange</button><button class="btn" id="shuf" title="Random order, then repack">Shuffle</button>
+    <select class="btn" id="size" aria-label="Poster size"><option value="auto">Size: grows to fit</option><option value="sq">Square</option><option value="a2">A2 portrait</option><option value="p24">24×36 in portrait</option></select>
+    <select class="btn" id="nt" aria-label="Add notice box"><option value="">＋ Notice box…</option><option value="notice">Notice (blue)</option><option value="content">Content issue (orange)</option><option value="style">Style issue (yellow)</option><option value="delete">Deletion (red)</option></select><button class="btn" id="ib">＋ Blank infobox</button><button class="btn" id="clear">Clear</button>
+    <span class="sp"></span><span id="count" class="msg"></span>
+  </div>
+  <div class="bar">
+    <label><input type="checkbox" id="cb" checked> Credits strip on PNG</label><button class="btn" id="cc">Copy credits</button>
+    <span class="sp"></span><span id="toast" class="msg"></span>
+    <button class="btn" id="share">Copy share link</button><button class="btn p" id="png">Download PNG</button>
+  </div>
+  <div id="wrap"><div id="board"><div id="empty">Your poster is empty.<br>Search on the left and click images to add them.</div></div></div>
+  <p class="msg" style="max-width:760px;margin:14px auto 0">Drag tiles to move, pull the blue corner to resize, click a caption to edit it. Images come from Wikipedia and Wikimedia Commons under their own licenses, so check each file's page before publishing or selling a poster.</p>
+</section>
+</main>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const API='https://en.wikipedia.org/w/api.php',REST='https://en.wikipedia.org/api/rest_v1/page/media-list/',W=1200,M=16,U=1,G=8,DW=227;
+const board=$('#board'),wrap=$('#wrap'),res=$('#res');
+let tiles=[],z=1,k=1,uid=0,lastList=null,lastTitle='';
+const get=async u=>{const r=await fetch(u);if(!r.ok)throw Error(r.status);return r.json()};
+const fail=()=>res.innerHTML='<p class="msg">Couldn\'t reach Wikipedia. Check your connection and try again.</p>';
+const https=u=>u&&u.startsWith('//')?'https:'+u:u;
+
+/* ---------- discovery ---------- */
+['Retro technology','Synthesizers','Japanese snacks','Video game maps','Brutalist architecture','Fungi','Locomotives','Typography'].forEach(t=>{
+  const b=document.createElement('button');b.className='l';b.textContent=t;b.onclick=()=>{$('#q').value=t;search(t)};$('#chips').append(b)});
+const rnd=document.createElement('button');rnd.className='btn';rnd.textContent='🎲 Random';rnd.onclick=()=>list('&generator=random&grnnamespace=0&grnlimit=12','Random articles');$('#chips').append(rnd);
+
+function search(q){
+  q=q.trim();if(!q)return;
+  const m=q.match(/wikipedia\.org\/wiki\/([^?#]+)/);
+  if(m)return openArticle(decodeURIComponent(m[1]).replace(/_/g,' '));
+  list('&generator=search&gsrlimit=15&gsrsearch='+encodeURIComponent(q),'Results for “'+q+'”');
+}
+function showList(L){
+  res.innerHTML='<h2>'+esc(L.title)+'</h2>'+(L.p.length?'':'<p class="msg">No articles found. Try a broader term.</p>');
+  L.p.forEach(a=>{const h=document.createElement('div');h.className='hit';
+    h.innerHTML=(a.thumbnail?'<img src="'+esc(a.thumbnail.source)+'" alt="">':'<i></i>')+'<div><b>'+esc(a.title)+'</b><small>'+esc(a.description||'')+'</small></div>';
+    h.onclick=()=>openArticle(a.title);res.append(h)});
+}
+async function list(gen,title){
+  res.innerHTML='<p class="msg">Loading…</p>';
+  try{
+    const d=await get(API+'?action=query&format=json&origin=*&prop=pageimages|description&piprop=thumbnail&pithumbsize=96'+gen);
+    const p=Object.values(d.query?.pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
+    lastList={title,p};showList(lastList);
+  }catch(e){fail()}
+}
+async function openArticle(t,all){
+  lastTitle=t;res.innerHTML='<p class="msg">Loading images from “'+esc(t)+'”…</p>';
+  try{
+    const d=await get(REST+encodeURIComponent(t.replace(/ /g,'_')));
+    let it=(d.items||[]).filter(i=>i.type==='image'&&i.srcset&&i.srcset.length);
+    const cap=i=>(i.caption&&i.caption.text||'').trim();
+    const shown=all?it:it.filter(cap);
+    res.innerHTML='<button class="l" id="back">← Back to results</button><h2>'+esc(t)+'</h2><div class="bar" style="margin:0"><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/'+encodeURIComponent(t.replace(/ /g,'_'))+'">Open article ↗</a><span class="sp"></span><button class="l" id="ibx">Add infobox</button>&nbsp;&nbsp;<button class="l" id="more">More like this</button></div>'
+      +'<label style="display:block;margin:6px 0"><input type="checkbox" id="all"'+(all?' checked':'')+'> Include images without captions</label><div class="grid" id="g"></div>'
+      +(shown.length?'':'<p class="msg">No captioned images in this article. Tick the box above, or try another article.</p>');
+    $('#back').onclick=()=>lastList?showList(lastList):(res.innerHTML='<p class="msg">Search for a topic to see results.</p>');
+    $('#ibx').onclick=()=>addInfobox(t);$('#more').onclick=()=>list('&generator=search&gsrlimit=15&gsrsearch='+encodeURIComponent('morelike:'+t),'Similar to “'+t+'”');
+    $('#all').onchange=e=>openArticle(t,e.target.checked);
+    const g=$('#g');
+    shown.forEach(i=>{
+      const s=i.srcset,thumb=https(s[0].src),full=https(s[s.length-1].src);
+      const c=cap(i)||i.title.replace(/^File:/,'').replace(/\.\w+$/,'').replace(/_/g,' '),ch=(i.caption&&i.caption.html?clean(i.caption.html):'')||esc(c);
+      const el=document.createElement('div');el.className='card';el.title='Add to poster';
+      el.innerHTML='<img loading="lazy" src="'+esc(thumb)+'" alt=""><p>'+esc(c)+'</p>';
+      if(tiles.some(x=>x.src===full))el.classList.add('on');
+      el.onclick=()=>{addTile({src:full,cap:ch,w:DW,kind:'img'});el.classList.add('on')};
+      g.append(el)});
+  }catch(e){fail()}
+}
+$('#go').onclick=()=>search($('#q').value);
+$('#q').onkeydown=e=>{if(e.key==='Enter')search(e.target.value)};
+
+/* ---------- poster ---------- */
+const SZ={auto:[0,2400],sq:[1200,2400],a2:[1697,2480],p24:[1800,2400]},PFX='https://upload.wikimedia.org/wikipedia/',CR={};
+let size='auto',hist=[],hi=-1,ft;
+const OK={A:[],I:[],B:[],EM:[],STRONG:[],BR:[],DIV:[],TABLE:[],TBODY:[],TR:[],TH:['colspan'],TD:['colspan']};
+const NB={
+ notice:{w:300,cap:'<b>This article contains special characters.</b> Without proper rendering support, you may see question marks, boxes, or other symbols instead of the intended characters.'},
+ content:{w:300,cap:'<b>This article needs additional citations for verification.</b> Please help improve this article by adding citations to reliable sources.'},
+ style:{w:300,cap:'<b>This article may be too long to read and navigate comfortably.</b> Consider splitting content into sub-articles or condensing it.'},
+ delete:{w:300,cap:'<b>This article is being considered for deletion</b> in accordance with Wikipedia’s deletion policy.'}};
+const TPL={info:{w:260,cap:'<table><tbody><tr><th colspan="2">Article title</th></tr><tr><th>Type</th><td>Edit me</td></tr><tr><th>Released</th><td>2015</td></tr><tr><th>Country</th><td>Japan</td></tr></tbody></table>'}};
+
+/* Real infoboxes: fetched from the article's rendered lead section, sanitized, styled by our own CSS. */
+const IBX={},BOX=new Set('TABLE TBODY THEAD TR TH TD CAPTION DIV SPAN A B I BR SMALL UL OL LI IMG ABBR CITE HR SUB'.split(' '));
+function cleanBox(b){
+  b.querySelectorAll('style,script,link,sup,.mw-editsection,.navbar,.noprint,.mw-collapsible-toggle').forEach(n=>n.remove());
+  (function w(n){[...n.childNodes].forEach(c=>{
+    if(c.nodeType===3)return;
+    if(c.nodeType!==1){c.remove();return}
+    w(c);const tg=c.tagName;
+    if(!BOX.has(tg)){c.replaceWith(...c.childNodes);return}
+    const ss=tg==='IMG'?c.getAttribute('srcset'):null;
+    [...c.attributes].forEach(a=>{const nm=a.name;
+      if(nm==='class'){const v=a.value.split(/\s+/).filter(x=>/^(infobox|hlist|plainlist|nowrap)/.test(x)).join(' ');v?c.setAttribute('class',v):c.removeAttribute('class')}
+      else if(nm==='style'){if(/url\s*\(|expression|@import|behavior|javascript|position/i.test(a.value))c.removeAttribute(nm)}
+      else if(!['colspan','rowspan','alt','width','height','href','src'].includes(nm))c.removeAttribute(nm)});
+    if(tg!=='IMG')c.removeAttribute('src');
+    if(tg!=='A')c.removeAttribute('href');
+    const abs=u=>u.startsWith('./')?'https://en.wikipedia.org/wiki/'+u.slice(2):u.startsWith('/wiki/')?'https://en.wikipedia.org'+u:u.startsWith('//')?'https:'+u:u;
+    if(tg==='IMG'){let u=abs(c.getAttribute('src')||'');
+      if(ss){const l=ss.split(',').pop().trim().split(' ')[0];if(l)u=abs(l)}
+      if(!u.startsWith(PFX)){c.remove();return}
+      c.setAttribute('src',u);c.setAttribute('crossorigin','anonymous')}
+    else if(tg==='A'){const u=abs(c.getAttribute('href')||'');
+      if(/^https?:\/\//i.test(u)){c.setAttribute('href',u);c.target='_blank';c.rel='noopener'}else c.replaceWith(...c.childNodes)}
+  })})(b);
+  return b.outerHTML}
+function getIbx(t){
+  return IBX[t]||(IBX[t]=get(API+'?action=parse&format=json&formatversion=2&origin=*&prop=text&section=0&disableeditsection=1&redirects=1&page='+encodeURIComponent(t)).then(d=>{
+    const b=new DOMParser().parseFromString((d.parse&&d.parse.text)||'','text/html').querySelector('table.infobox');
+    if(!b)throw Error('none');return cleanBox(b)}).catch(e=>{delete IBX[t];throw e}))}
+async function addInfobox(t){
+  flash('Fetching infobox…');
+  try{await getIbx(t);addTile({kind:'ibx',src:t,w:280});flash('')}
+  catch(e){flash(e.message==='none'?'“'+t+'” has no infobox in its lead section.':'Couldn’t load that infobox.')}}
+
+/* Allow-list sanitizer: captions can come from Wikipedia or from a stranger's share link. */
+function clean(h){
+  const d=new DOMParser().parseFromString('<body>'+h,'text/html').body;
+  (function w(n){[...n.childNodes].forEach(c=>{
+    if(c.nodeType===3)return;
+    if(c.nodeType!==1||/^(SCRIPT|STYLE|SUP)$/.test(c.tagName)){c.remove();return}
+    w(c);const ok=OK[c.tagName];
+    if(!ok){c.replaceWith(...c.childNodes);return}
+    let u=c.getAttribute('href')||'';
+    [...c.attributes].forEach(a=>{if(!ok.includes(a.name))c.removeAttribute(a.name)});
+    if(c.tagName==='A'){
+      u=u.startsWith('./')?'https://en.wikipedia.org/wiki/'+u.slice(2):u.startsWith('/wiki/')?'https://en.wikipedia.org'+u:u.startsWith('//')?'https:'+u:u;
+      if(/^https?:\/\//i.test(u)){c.setAttribute('href',u);c.target='_blank';c.rel='noopener'}else c.replaceWith(...c.childNodes)}
+  })})(d);
+  return d.innerHTML}
+const tx=h=>{const d=document.createElement('div');d.innerHTML=clean(h);return d.textContent.trim()};
+function fileName(s){try{const p=s.split('/'),i=p.indexOf('thumb');return decodeURIComponent((i>-1?p[i+3]:p[p.length-1])||'').replace(/_/g,' ')}catch(e){return ''}}
+function flash(m){$('#toast').textContent=m;clearTimeout(ft);ft=setTimeout(()=>$('#toast').textContent='',7000)}
+
+/* ---------- layout ---------- */
+const fs=(w,kd)=>Math.max(6,Math.min(20,w/(kd==='img'?17:22.7)))+'px';
+const pos=t=>{t.el.style.left=t.x+'px';t.el.style.top=t.y+'px'};
+const setW=(t,w)=>{t.w=w;t.el.style.width=w+'px';t.el.style.fontSize=fs(w,t.kind)};
+const restack=()=>tiles.forEach((t,i)=>t.el.style.zIndex=i+1);
+function fit(){k=Math.min(1,($('#stage').clientWidth-24)/W);board.style.transform='scale('+k+')';fitH()}
+function fitH(){
+  const fx=SZ[size][0],vis=tiles.filter(t=>t.el.style.visibility==='visible'),
+  h=fx||Math.max(700,...vis.map(t=>t.y+t.el.offsetHeight+M));
+  board.style.height=h+'px';wrap.style.width=W*k+'px';wrap.style.height=h*k+'px';
+  let out=0;tiles.forEach(t=>{const o=!!fx&&t.y+t.el.offsetHeight>h+1;t.el.classList.toggle('out',o);if(o)out++});
+  $('#empty').style.display=tiles.length?'none':'grid';
+  $('#count').innerHTML=tiles.length+' item'+(tiles.length==1?'':'s')+(out?' · <b style="color:#b32424">'+out+' outside poster</b>':'');
+}
+function place(t,others){
+  const n=Math.floor((W-2*M+G)/U),h=Array(n).fill(M),w=Math.min(n,Math.ceil((t.el.offsetWidth+G)/U));
+  others.forEach(o=>{const a=Math.max(0,Math.floor((o.x-M)/U)),b=Math.min(n,Math.ceil((o.x-M+o.el.offsetWidth+G)/U));
+    for(let i=a;i<b;i++)h[i]=Math.max(h[i],o.y+o.el.offsetHeight+8)});
+  let bx=0,by=1e9;
+  for(let x=0;x<=n-w;x++){let m=0;for(let i=x;i<x+w;i++)m=Math.max(m,h[i]);if(m<by){by=m;bx=x}}
+  t.x=M+bx*U;t.y=by;pos(t);
+}
+function repack(order){const d=[];order.forEach(t=>{place(t,d);d.push(t)});fitH();commit()}
+
+/* ---------- tiles ---------- */
+function addTile(o){
+  const kind=o.kind||'img',t={src:o.src||'',cap:o.cap||'',w:o.w||DW,x:o.x,y:o.y,kind},el=t.el=document.createElement('div');
+  el.className='tile '+kind+(kind==='notice'?' nb-'+(NB[t.src]?t.src:'notice'):'');
+  el.innerHTML=(kind==='img'?'<img crossorigin="anonymous" alt="">':'')+'<div class="cap" contenteditable="true" spellcheck="false"></div><span class="tb"><button class="fr" title="Bring to front">↑</button><button class="bk" title="Send to back">↓</button></span><button class="x" title="Remove">×</button><i class="rs"></i>';
+  const cp=el.querySelector('.cap');cp.innerHTML=clean(t.cap);t.cap=cp.innerHTML;
+  setW(t,t.w);tiles.push(t);board.append(el);restack();
+  if(t.x!=null){pos(t);el.style.visibility='visible'}
+  const done=()=>{const fresh=t.x==null;
+    if(fresh)place(t,tiles.filter(x=>x!==t&&x.el.style.visibility==='visible'));else pos(t);
+    el.style.visibility='visible';fitH();fresh?commit():save()};
+  const im=el.querySelector('img');
+  if(kind==='ibx'){cp.contentEditable='false';getIbx(t.src).then(h=>{cp.innerHTML=h;return Promise.allSettled([...cp.querySelectorAll('img')].map(i=>i.decode()))}).catch(()=>{cp.textContent='Couldn’t load this infobox.'}).then(done)}
+  else if(im){im.onload=done;im.onerror=()=>{im.removeAttribute('src');im.style.height='60px';done()};im.src=t.src}else done();
+  cp.oninput=()=>{t.cap=cp.innerHTML;save()};
+  cp.onblur=()=>{t.cap=cp.innerHTML;commit()};
+  el.querySelector('.x').onclick=()=>{el.remove();tiles=tiles.filter(x=>x!==t);fitH();commit()};
+  el.querySelector('.fr').onclick=()=>{tiles.push(...tiles.splice(tiles.indexOf(t),1));restack();commit()};
+  el.querySelector('.bk').onclick=()=>{tiles.unshift(...tiles.splice(tiles.indexOf(t),1));restack();commit()};
+  fitH();
+}
+board.addEventListener('pointerdown',e=>{
+  const el=e.target.closest('.tile');if(!el||e.target.closest('.x,.tb'))return;
+  const cp=e.target.closest('.cap');if(cp&&document.activeElement===cp)return;
+  const t=tiles.find(x=>x.el===el),rs=e.target.classList.contains('rs'),a=e.target.closest('a'),sx=e.clientX,sy=e.clientY,ox=t.x,oy=t.y,ow=t.w;let mv=false;
+  tiles.push(...tiles.splice(tiles.indexOf(t),1));restack();el.setPointerCapture(e.pointerId);
+  el.onpointermove=ev=>{const px=ev.clientX-sx,py=ev.clientY-sy;if(Math.abs(px)+Math.abs(py)>3)mv=true;
+    if(rs)setW(t,Math.max(70,Math.min(W-2*M,ow+px/k)));else{t.x=Math.max(0,ox+px/k);t.y=Math.max(0,oy+py/k)}pos(t);fitH()};
+  el.onpointerup=()=>{el.onpointermove=el.onpointerup=null;
+    if(mv)commit();else if(a&&!rs)open(a.href,'_blank','noopener');else if(cp)cp.focus()};
+  e.preventDefault();
+});
+
+/* ---------- history + autosave ---------- */
+const state=()=>tiles.map(t=>[t.src,t.cap,Math.round(t.w),Math.round(t.x),Math.round(t.y),t.kind]);
+const toObj=r=>Array.isArray(r)?{src:r[0],cap:r[1],w:r[2],x:r[3],y:r[4],kind:r[5]||'img'}:r;
+function save(){try{localStorage.setItem('wikiposter',JSON.stringify(state()))}catch(e){}}
+function ub(){$('#undo').disabled=hi<1;$('#redo').disabled=hi>=hist.length-1}
+function commit(){save();const s=JSON.stringify(state());if(hist[hi]===s)return;hist=hist.slice(0,hi+1);hist.push(s);if(hist.length>100)hist.shift();hi=hist.length-1;ub()}
+function jump(i){hi=i;tiles.forEach(t=>t.el.remove());tiles=[];JSON.parse(hist[i]).forEach(r=>addTile(toObj(r)));fitH();save();ub()}
+const doUndo=()=>hi>0&&jump(hi-1),doRedo=()=>hi<hist.length-1&&jump(hi+1);
+$('#undo').onclick=doUndo;$('#redo').onclick=doRedo;
+addEventListener('keydown',e=>{
+  if(!(e.ctrlKey||e.metaKey)||e.target.closest('.cap,input,select'))return;
+  const c=e.key.toLowerCase();if(c==='z'){e.preventDefault();e.shiftKey?doRedo():doUndo()}else if(c==='y'){e.preventDefault();doRedo()}});
+
+/* ---------- toolbar ---------- */
+$('#pack').onclick=()=>repack([...tiles].sort((a,b)=>(a.y-b.y)||(a.x-b.x)));
+$('#shuf').onclick=()=>{const s=[...tiles];for(let i=s.length;i>1;){const j=Math.random()*i--|0;[s[i],s[j]]=[s[j],s[i]]}repack(s)};
+$('#size').onchange=e=>{size=e.target.value;try{localStorage.setItem('wikiposter-size',size)}catch(x){}fitH()};
+$('#nt').onchange=e=>{const v=e.target.value;if(v)addTile({kind:'notice',src:v,...NB[v]});e.target.value=''};
+$('#ib').onclick=()=>addTile({kind:'info',...TPL.info});
+$('#clear').onclick=()=>{if(!tiles.length)return;tiles.forEach(t=>t.el.remove());tiles=[];fitH();commit();
+  document.querySelectorAll('.card.on').forEach(c=>c.classList.remove('on'));flash('Poster cleared. Undo brings it back.')};
+
+/* ---------- share link ---------- */
+const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+async function encode(){
+  const o={s:size,t:state().map(r=>[r[0].startsWith(PFX)?r[0].slice(PFX.length):r[0],...r.slice(1)])};
+  return b64(await new Response(new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer())}
+async function decode(s){
+  const b=Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+  const o=JSON.parse(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text());
+  const n=v=>Math.max(0,Math.min(5000,+v||0));
+  return{s:SZ[o.s]?o.s:'auto',t:(o.t||[]).slice(0,150).map(r=>{
+    const kd=['notice','info','ibx'].includes(r[5])?r[5]:'img',c=clean(String(r[1]||'')),w=Math.max(70,n(r[2])),x=n(r[3]),y=n(r[4]);
+    if(kd==='img'){if(!/^(commons|en)\/(thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/[^\s"'<>\\]+$/.test(String(r[0])))return null;return[PFX+r[0],c,w,x,y,kd]}
+    if(kd==='ibx')return r[0]&&String(r[0]).length<200?[String(r[0]),'',w,x,y,kd]:null;
+    return[kd==='notice'&&NB[r[0]]?r[0]:'',c,w,x,y,kd]}).filter(Boolean)}}
+$('#share').onclick=async()=>{
+  if(!tiles.length)return flash('Add something first.');
+  if(typeof CompressionStream!=='function')return flash('This browser can’t build share links.');
+  const u=location.href.split('#')[0]+'#p='+await encode();
+  let m='Link copied ('+u.length.toLocaleString()+' characters).'+(u.length>8000?' Very long links can be cut off by chat apps.':'')+(location.protocol==='file:'?' This page is a local file, so the link only works on this computer.':'');
+  try{await navigator.clipboard.writeText(u);flash(m)}catch(e){prompt('Copy this link:',u)}
+};
+addEventListener('hashchange',()=>location.reload());
+
+/* ---------- credits ---------- */
+async function getCredits(){
+  const ns=[...new Set(tiles.filter(t=>t.kind==='img'&&t.src).map(t=>'File:'+fileName(t.src)))],need=ns.filter(n=>!CR[n]||CR[n].bad);
+  for(let i=0;i<need.length;i+=40){
+    const g=need.slice(i,i+40);let m=null;
+    try{const d=await get(API+'?action=query&format=json&origin=*&prop=imageinfo&iiprop=extmetadata&iiextmetadatafilter=Artist|LicenseShortName&titles='+encodeURIComponent(g.join('|')));
+      m={};Object.values(d.query.pages).forEach(p=>m[p.title]=(p.imageinfo&&p.imageinfo[0].extmetadata)||{})}
+    catch(e){flash('Couldn’t fetch some credits; they will show as unknown.')}
+    g.forEach(n=>{const x=(m&&m[n])||{};CR[n]={n,a:tx((x.Artist||{}).value||''),l:((x.LicenseShortName||{}).value||'').trim(),bad:!m}})}
+  return ns.map(n=>CR[n]);
+}
+const line=c=>c.n.replace(/^File:/,'').replace(/\.\w+$/,'')+' — '+(c.a||'author not listed')+', '+(c.l||'license not listed');
+$('#cc').onclick=async()=>{
+  if(!tiles.some(t=>t.kind==='img'))return flash('No images on the poster yet.');
+  flash('Looking up credits…');const c=await getCredits();
+  const txt=c.map(x=>line(x)+'\n  https://en.wikipedia.org/wiki/'+encodeURIComponent(x.n.replace(/ /g,'_'))).join('\n');
+  try{await navigator.clipboard.writeText(txt);flash('Credits for '+c.length+' images copied.')}catch(e){prompt('Copy credits:',txt)}
+};
+
+/* ---------- export ---------- */
+$('#png').onclick=async()=>{
+  if(!tiles.length)return;
+  if(typeof html2canvas!=='function'){alert('The export library did not load. Check your connection and reload.');return}
+  const b=$('#png'),old=board.style.transform,oh=board.style.height;let st=null;
+  b.disabled=true;b.textContent='Rendering…';document.activeElement.blur();
+  try{
+    if($('#cb').checked&&tiles.some(t=>t.kind==='img')){
+      const c=await getCredits(),h=Math.ceil(c.length/2),col=a=>'<div>'+a.map(x=>esc(line(x))).join('<br>')+'</div>';
+      st=document.createElement('div');st.id='cr';
+      st.innerHTML='<b>Image credits</b> (Wikipedia / Wikimedia Commons)<div class="cols">'+col(c.slice(0,h))+col(c.slice(h))+'</div>';
+      st.style.top=parseInt(oh)+'px';board.append(st)}
+    board.style.transform='none';board.classList.add('exp');
+    const H=parseInt(oh)+(st?st.offsetHeight+16:0);board.style.height=H+'px';
+    const cv=await html2canvas(board,{useCORS:true,scale:Math.min(SZ[size][1]/W,12000/H),backgroundColor:'#fff',width:W,height:H,scrollX:0,scrollY:0});
+    const a=document.createElement('a');a.download='wikiposter.png';a.href=cv.toDataURL('image/png');a.click();
+  }catch(e){alert('Export failed. One of the images may block cross-site use; remove it and try again.')}
+  if(st)st.remove();board.style.transform=old;board.style.height=oh;board.classList.remove('exp');b.disabled=false;b.textContent='Download PNG';
+};
+
+/* ---------- startup ---------- */
+addEventListener('resize',fit);
+(async()=>{
+  let a=null,local=[];
+  try{size=localStorage.getItem('wikiposter-size')||'auto'}catch(e){}
+  try{local=JSON.parse(localStorage.getItem('wikiposter')||'[]')}catch(e){}
+  const h=location.hash.match(/^#p=([\w-]+)/);
+  if(h){
+    try{const o=await decode(h[1]);
+      if(!local.length||confirm('Open this shared poster? It will replace the poster saved in this browser.')){a=o.t;size=o.s}}
+    catch(e){flash('That share link is damaged or unsupported.')}
+    try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}
+  if(!a)a=local;
+  if(!SZ[size])size='auto';
+  $('#size').value=size;a.forEach(r=>addTile(toObj(r)));
+  fit();hist=[JSON.stringify(state())];hi=0;ub();
+})();
+</script>
+</body></html>
